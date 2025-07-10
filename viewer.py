@@ -43,6 +43,11 @@ mesh.compute_vertex_normals()
 axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
 
 # simulation setting
+roll_deg = 0
+pitch_deg = 0
+yaw_deg = 0
+rotation = np.array([np.radians(roll_deg), np.radians(pitch_deg), np.radians(yaw_deg)], dtype=np.float32) 
+
 sim_settings = {
     "width": 256,  # Spatial resolution of the observations
     "height": 256,
@@ -53,6 +58,7 @@ sim_settings = {
     "color_sensor": True,  # RGB sensor
     "semantic_sensor": True,  # Semantic sensor
     "depth_sensor": True,  # Depth sensor
+    "rotation": rotation,
     "seed": 1,
 }
 

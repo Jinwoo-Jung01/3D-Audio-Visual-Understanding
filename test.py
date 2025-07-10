@@ -13,6 +13,7 @@ import numpy as np
 import open3d as o3d
 import sys
 from pathlib import Path
+from scipy.spatial.transform import Rotation as R
 
 # import functions
 import functions
@@ -21,18 +22,14 @@ import functions
 Research about .navmesh
 """
 
-if len(sys.argv) != 4:
-    print("\nmanual : python3 simulator.py <scene_id> <region_id> <use_default>")
-    print("example: python3 simulator.py 00800-TEEsavR23oF 1 True")
+if len(sys.argv) != 3:
+    print("\nmanual : python3 simulator.py <scene_id> <region_id>")
+    print("example: python3 simulator.py 00800-TEEsavR23oF 1")
     sys.exit(1)
 
 scene_id = sys.argv[1]
 scene_name = scene_id.split("-")[1]
 region_id = int(sys.argv[2])
-if sys.argv[3] not in ["True", "False"]:
-    print("Error: use_default must be True or False")
-    sys.exit(1)
-use_default = sys.argv[3]
 
 # make path automatically
 base_path = Path(__file__).resolve().parent
@@ -50,12 +47,12 @@ mesh = o3d.io.read_triangle_mesh(scene_path)
 mesh.compute_vertex_normals()
 
 axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
+print("\n\033[91m============== Debugging ==============\033[0m")
 
 # simulation setting
-roll_deg = 0
-pitch_deg = 0
-yaw_deg = 0
-rotation = np.array([np.radians(roll_deg), np.radians(pitch_deg), np.radians(yaw_deg)], dtype=np.float32) 
+pitch_deg = -15
+pitch_rad = np.radians(pitch_deg)
+rotation_vector = np.array([pitch_rad, 0, 0], dtype=np.float32)  
 
 sim_settings = {
     "width": 960,  # Spatial resolution of the observations
@@ -68,18 +65,17 @@ sim_settings = {
     "color_sensor": True,  # RGB sensor
     "semantic_sensor": True,  # Semantic sensor
     "depth_sensor": True,  # Depth sensor
-    "rotation": rotation,
+    "quat_xyzw": rotation_vector,
     "seed": 1,
 }
 
 # set simulation
-cfg = functions.make_custome_cfg(sim_settings)
+cfg = functions.make_custome_cfg_rotation(sim_settings)
 sim = habitat_sim.Simulator(cfg)
 scene = sim.semantic_scene              # semantic scnene
 semantic_color_map = functions.load_semantic_colors(semanticTXT_path)
 sim.pathfinder.load_nav_mesh(navmesh_path)
 
-# print("\n\033[91m============== Debugging ==============\033[0m")
 
 ## 1. Filtering based on specific room
 
@@ -115,11 +111,16 @@ navigable_pcd_filtered = np.asarray(navigable_pcd_filtered.points)
 navigable_position = navigable_pcd_filtered[np.random.choice(len(navigable_pcd_filtered))]
 sampled_habitat_point = functions.convert_back_coordinate(navigable_position)
 
-if use_default == "False":
-    agent_state = sim.get_agent(0).get_state()
-    agent_state.position = sampled_habitat_point
-    agent_state.rotation = habitat_sim.utils.common.quat_from_angle_axis(0.0, np.array([0, 1.0, 0]))
-    sim.get_agent(0).set_state(agent_state)
+agent_state = sim.get_agent(0).get_state()
+agent_state.position = [-9.448947, 0.16337794, -1.182925]
+agent_state.rotation = habitat_sim.utils.common.quat_from_angle_axis(0.0, np.array([0, 1.0, 0]))
+sim.get_agent(0).set_state(agent_state)
+
+agent = sim.get_agent(0)
+state = agent.get_state()
+
+print("Agent Position:", state.position)
+print("Agent Rotation (quaternion):", state.rotation)
 
 # Get Camera's Image
 observations = sim.get_sensor_observations()
@@ -152,4 +153,4 @@ for ax, img, title in zip(axes, images, titles):
 plt.tight_layout()
 plt.show()
 
-# print("\n\033[91m============== Finish ==============\033[0m")
+print("\n\033[91m============== Finish ==============\033[0m")
