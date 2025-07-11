@@ -346,7 +346,7 @@ def visualize_3D_scene(json_path, sem_mesh, semantic_color_map):
     # load json
     with open(json_path, "r") as f:
         scene_info = json.load(f)
-
+    print("1")
     # make 3D scene by json
     for region in scene_info["regions"]:
         region_id = region["region_id"]

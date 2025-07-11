@@ -19,18 +19,18 @@ import functions
 
 if len(sys.argv) != 2:
     print("\nmanual : python3 loadScenebyJSON.py <scene_id>")
-    print("example: python3 loadScenebyJSON.py")
+    print("example: python3 loadScenebyJSON.py 00006-HkseAnWCgqk")
     sys.exit(1)
 
 scene_id = sys.argv[1]
 scene_name = scene_id.split("-")[1]
 
 # make path automatically
-base_path = Path(__file__).resolve().parent
-scene_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.basis.glb")
-semantic_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
-semanticTXT_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
-scene_cfg_path = str(base_path / "data/scene_datasets/hm3d/hm3d_annotated_minival_basis.scene_dataset_config.json")
+base_path = Path(__file__).resolve().parent.parent
+scene_path = str(base_path / f"data/scene_dataset/hm3d/train/{scene_id}/{scene_name}.basis.glb")
+semantic_path = str(base_path / f"data/scene_dataset/hm3d/train/{scene_id}/{scene_name}.semantic.glb")
+semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/train/{scene_id}/{scene_name}.semantic.txt")
+scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/train/hm3d_annotated_train_basis.scene_dataset_config.json")
 
 # open3d objects
 sem_mesh = o3d.io.read_triangle_mesh(semantic_path)
@@ -43,7 +43,7 @@ axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0,
 
 semantic_color_map = functions.load_semantic_colors(semanticTXT_path)
 
-json_path = f"./format/{scene_id}_scene_info.json"
+json_path = str(base_path / f"data/format/train/{scene_id}_scene_info.json")
 functions.visualize_3D_scene(json_path, sem_mesh, semantic_color_map)
 
 # print("\n\033[91m============== Debugging ==============\033[0m")
