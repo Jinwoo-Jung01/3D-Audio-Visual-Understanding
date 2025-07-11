@@ -3,7 +3,8 @@
     "paths": {
       ".glb": [
         "minival/00800-TEEsavR23oF/*.basis.glb",
-        "val/00800-TEEsavR23oF/*.basis.glb"
+        "val/00800-TEEsavR23oF/*.basis.glb",
+        "val/00802-wcojb4TFT35/*.basis.glb"
       ]
     },
     "default_attributes": {
@@ -37,7 +38,8 @@
     "paths": {
       ".json": [
         "minival/00800-TEEsavR23oF/*.basis.scene_instance.json",
-        "val/00800-TEEsavR23oF/*.basis.scene_instance.json"
+        "val/00800-TEEsavR23oF/*.basis.scene_instance.json",
+        "val/00802-wcojb4TFT35/*.basis.scene_instance.json"
       ]
     }
   }

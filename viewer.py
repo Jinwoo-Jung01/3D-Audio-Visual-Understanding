@@ -72,7 +72,7 @@ semantic_color_map = functions.load_semantic_colors(semanticTXT_path)
 bboxes = functions.create_bboxes_from_scene(scene, semantic_color_map, region_id)
 
 # Visualization
-o3d.visualization.draw_geometries([semantic_path, axes]+bboxes)
+o3d.visualization.draw_geometries([sem_mesh, axes])
 
 # print("\n\033[91m============== Debugging ==============\033[0m")
 # print("\n\033[91m============== Finish ==============\033[0m")

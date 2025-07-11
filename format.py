@@ -74,7 +74,7 @@ scene = sim.semantic_scene              # semantic scnene
 semantic_color_map = functions.load_semantic_colors(semanticTXT_path)
 
 # make format
-# functions.extract_single_region_info(scene, region_id, save_path=f"./format/region_{region_id}_info.json")
+functions.extract_single_region_info(scene, region_id, save_path=f"./format/region_{region_id}_info.json")
 
 # crop 3D Scene based on each roon's floor and maximum height
 bbox = functions.create_bbox_from_scene(scene, semantic_color_map, region_id, 'floor')

@@ -13,6 +13,7 @@ import numpy as np
 import open3d as o3d
 import sys
 from pathlib import Path
+import json
 
 # import functions
 import functions
@@ -41,6 +42,7 @@ semantic_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene
 semanticTXT_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
 navmesh_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
 scene_cfg_path = str(base_path / "data/scene_datasets/hm3d/hm3d_annotated_minival_basis.scene_dataset_config.json")
+json_path = str(base_path / f"format/region_{region_id}_info.json")
 
 # open3d objects
 sem_mesh = o3d.io.read_triangle_mesh(semantic_path)
@@ -78,8 +80,6 @@ sim = habitat_sim.Simulator(cfg)
 scene = sim.semantic_scene              # semantic scnene
 semantic_color_map = functions.load_semantic_colors(semanticTXT_path)
 sim.pathfinder.load_nav_mesh(navmesh_path)
-
-# print("\n\033[91m============== Debugging ==============\033[0m")
 
 ## 1. Filtering based on specific room
 
@@ -152,4 +152,54 @@ for ax, img, title in zip(axes, images, titles):
 plt.tight_layout()
 plt.show()
 
-# print("\n\033[91m============== Finish ==============\033[0m")
+print("\n\033[91m============== Debugging ==============\033[0m")
+# 2. JSON 파일 로드
+with open(json_path, 'r') as f:
+    region_info = json.load(f)
+
+# 3. semantic_id → category 매핑
+id_to_category = {obj["semantic_id"]: obj["category"] for obj in region_info["objects"]}
+
+# 4. 이미지 내에서 등장한 semantic_id 목록
+unique_ids = np.unique(semantic)
+
+# 5. JSON에 정의된 ID만 필터링
+valid_ids = [sid for sid in unique_ids if sid in id_to_category]
+
+# 6. 결과 출력
+print(f"\n✅ 현재 뷰에 존재하는 semantic ID와 category:")
+for sid in valid_ids:
+    print(f"  - ID {sid}: {id_to_category[sid]}")
+
+# 7. semantic 이미지 시각화
+plt.figure(figsize=(10, 8))
+plt.imshow(rgb, cmap="tab20")
+plt.axis("off")
+plt.title("Semantic View with ID and Category")
+
+# 8. 각 ID의 중앙 픽셀 위치에 텍스트 오버레이
+for sid in valid_ids:
+    mask = (semantic == sid)
+    y, x = np.argwhere(mask).mean(axis=0).astype(int)
+    category = id_to_category[sid]
+    plt.text(x, y, f"{sid}\n{category}",
+             fontsize=8, color='white',
+             ha='center', va='center',
+             bbox=dict(facecolor='black', alpha=0.5, boxstyle='round,pad=0.2'))
+
+plt.tight_layout()
+plt.show()
+
+# if semantic is not None:
+#     plt.figure(figsize=(8, 6))
+#     plt.imshow(semantic)
+#     plt.title("Semantic")
+#     plt.axis("off")
+#     plt.tight_layout()
+#     plt.show()
+# else:
+#     print("Semantic sensor image not found.")
+
+
+
+print("\n\033[91m============== Finish ==============\033[0m")
