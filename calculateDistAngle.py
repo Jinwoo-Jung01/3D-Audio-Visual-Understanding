@@ -18,13 +18,9 @@ import json
 # import functions
 import functions
 
-"""
-Research about .navmesh
-"""
-
 if len(sys.argv) != 4:
-    print("\nmanual : python3 simulator.py <scene_id> <region_id> <use_default>")
-    print("example: python3 simulator.py 00800-TEEsavR23oF 1 True")
+    print("\nmanual : python3 calculateDistAngle.py <scene_id> <region_id> <use_default>")
+    print("example: python3 calculateDistAngle.py 00800-TEEsavR23oF 1 True")
     sys.exit(1)
 
 scene_id = sys.argv[1]
@@ -109,14 +105,13 @@ indices = roi_bbox.get_point_indices_within_bounding_box(pcd.points)
 navigable_pcd_filtered = pcd.select_by_index(indices)
 
 ## 2. Render and display RGB Image
-
 # Set agent's position based on navigable point
 navigable_pcd_filtered = np.asarray(navigable_pcd_filtered.points)
 navigable_position = navigable_pcd_filtered[np.random.choice(len(navigable_pcd_filtered))]
 sampled_habitat_point = functions.convert_back_coordinate(navigable_position)
+agent_state = sim.get_agent(0).get_state()
 
 if use_default == "False":
-    agent_state = sim.get_agent(0).get_state()
     agent_state.position = sampled_habitat_point
     agent_state.rotation = habitat_sim.utils.common.quat_from_angle_axis(0.0, np.array([0, 1.0, 0]))
     sim.get_agent(0).set_state(agent_state)
@@ -152,18 +147,40 @@ for ax, img, title in zip(axes, images, titles):
 plt.tight_layout()
 plt.show()
 
-
 with open(json_path, 'r') as f:
     region_info = json.load(f)
 
+id_to_center = {obj["semantic_id"]: np.array(obj["center"]) for obj in region_info["objects"]}
 id_to_category = {obj["semantic_id"]: obj["category"] for obj in region_info["objects"]}
+
 unique_ids = np.unique(semantic)
+valid_ids = [sid for sid in unique_ids if sid in id_to_center]
 
-valid_ids = [sid for sid in unique_ids if sid in id_to_category]
+agent_pos = np.array([agent_state.position[0], agent_state.position[2]])  
 
-print(f"\n현재 뷰에 존재하는 semantic ID와 category:")
+object_infos = []
 for sid in valid_ids:
-    print(f"  - ID {sid}: {id_to_category[sid]}")
+    center = id_to_center[sid]
+    center_xz = np.array([center[0], center[2]])
+
+    dist = np.linalg.norm(center_xz - agent_pos)
+    heading_diff = functions.calculate_heading(agent_pos, center_xz)
+
+    object_infos.append({
+        "id": sid,
+        "category": id_to_category[sid],
+        "center": center,
+        "distance": dist,
+        "heading_diff": heading_diff,
+    })
+
+nearest_objects = sorted(object_infos, key=lambda x: x["distance"])[:5]
+
+for obj in nearest_objects:
+    print(f" - ID {obj['id']} | {obj['category']}")
+    print(f"   ↳ center: {obj['center']}")
+    print(f"   ↳ distance: {obj['distance']:.2f} m")
+    print(f"   ↳ heading diff: {obj['heading_diff']:.2f}°")
 
 plt.figure(figsize=(10, 8))
 plt.imshow(rgb, cmap="tab20")
