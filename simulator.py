@@ -146,7 +146,10 @@ if len(images) == 1:
     axes = [axes]
 
 for ax, img, title in zip(axes, images, titles):
-    ax.imshow(img)
+    if title == "Semantic":
+        ax.imshow(img, cmap="tab20")
+    else:
+        ax.imshow(img)
     ax.set_title(title)
     ax.axis("off")
 
@@ -161,10 +164,6 @@ id_to_category = {obj["semantic_id"]: obj["category"] for obj in room_objects}
 
 unique_ids = np.unique(semantic)
 valid_ids = [sid for sid in unique_ids if sid in id_to_category]
-
-# print(f"\n[ Region ID = {region_id} ]에 존재하는 semantic ID와 category:")
-# for sid in valid_ids:
-#     print(f"  - ID {sid}: {id_to_category[sid]}")
 
 plt.figure(figsize=(10, 8))
 plt.imshow(rgb, cmap="tab20")
