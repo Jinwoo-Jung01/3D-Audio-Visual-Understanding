@@ -457,3 +457,10 @@ def calculate_heading(agent_pos_xz, object_pos_xz):
         angle_rad = -angle_rad
 
     return np.degrees(angle_rad)
+
+def calculate_rotation(obj_roll_deg, obj_pitch_deg, obj_yaw_deg):
+    q_x = mn.Quaternion.rotation(mn.Deg(obj_roll_deg), mn.Vector3.x_axis())
+    q_y = mn.Quaternion.rotation(mn.Deg(obj_yaw_deg), mn.Vector3.y_axis())
+    q_z = mn.Quaternion.rotation(mn.Deg(obj_pitch_deg), mn.Vector3.z_axis())
+    
+    return q_y * q_z * q_x
