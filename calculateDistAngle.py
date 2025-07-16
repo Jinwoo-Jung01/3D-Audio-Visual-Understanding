@@ -18,13 +18,9 @@ import json
 # import functions
 import functions
 
-"""
-Research about .navmesh
-"""
-
 if len(sys.argv) != 4:
-    print("\nmanual : python3 simulator.py <scene_id> <region_id> <use_default>")
-    print("example: python3 simulator.py 00800-TEEsavR23oF 1 True")
+    print("\nmanual : python3 calculateDistAngle.py <scene_id> <region_id> <use_default>")
+    print("example: python3 calculateDistAngle.py 00800-TEEsavR23oF 1 True")
     sys.exit(1)
 
 scene_id = sys.argv[1]
@@ -37,13 +33,12 @@ use_default = sys.argv[3]
 
 # make path automatically
 base_path = Path(__file__).resolve().parent
-base_path = Path("/home/jinwoo/AMILab")
-scene_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.glb")
-semantic_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
-semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
-navmesh_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
-scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/val/hm3d_annotated_val_basis.scene_dataset_config.json")
-json_path = str(base_path / f"data/format/val/{scene_id}_scene_info.json")
+scene_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.basis.glb")
+semantic_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
+semanticTXT_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
+navmesh_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
+scene_cfg_path = str(base_path / "data/scene_datasets/hm3d/hm3d_annotated_minival_basis.scene_dataset_config.json")
+json_path = str(base_path / f"format/region_{region_id}_info.json")
 
 # open3d objects
 sem_mesh = o3d.io.read_triangle_mesh(semantic_path)
@@ -110,14 +105,13 @@ indices = roi_bbox.get_point_indices_within_bounding_box(pcd.points)
 navigable_pcd_filtered = pcd.select_by_index(indices)
 
 ## 2. Render and display RGB Image
-
 # Set agent's position based on navigable point
 navigable_pcd_filtered = np.asarray(navigable_pcd_filtered.points)
 navigable_position = navigable_pcd_filtered[np.random.choice(len(navigable_pcd_filtered))]
 sampled_habitat_point = functions.convert_back_coordinate(navigable_position)
+agent_state = sim.get_agent(0).get_state()
 
 if use_default == "False":
-    agent_state = sim.get_agent(0).get_state()
     agent_state.position = sampled_habitat_point
     agent_state.rotation = habitat_sim.utils.common.quat_from_angle_axis(0.0, np.array([0, 1.0, 0]))
     sim.get_agent(0).set_state(agent_state)
@@ -146,10 +140,7 @@ if len(images) == 1:
     axes = [axes]
 
 for ax, img, title in zip(axes, images, titles):
-    if title == "Semantic":
-        ax.imshow(img, cmap="tab20")
-    else:
-        ax.imshow(img)
+    ax.imshow(img)
     ax.set_title(title)
     ax.axis("off")
 
@@ -159,16 +150,42 @@ plt.show()
 with open(json_path, 'r') as f:
     region_info = json.load(f)
 
-room_objects = next((r["objects"] for r in region_info["regions"] if r["region_id"] == region_id), [])
-id_to_category = {obj["semantic_id"]: obj["category"] for obj in room_objects}
+id_to_center = {obj["semantic_id"]: np.array(obj["center"]) for obj in region_info["objects"]}
+id_to_category = {obj["semantic_id"]: obj["category"] for obj in region_info["objects"]}
 
 unique_ids = np.unique(semantic)
-valid_ids = [sid for sid in unique_ids if sid in id_to_category]
+valid_ids = [sid for sid in unique_ids if sid in id_to_center]
+
+agent_pos = np.array([agent_state.position[0], agent_state.position[2]])  
+
+object_infos = []
+for sid in valid_ids:
+    center = id_to_center[sid]
+    center_xz = np.array([center[0], center[2]])
+
+    dist = np.linalg.norm(center_xz - agent_pos)
+    heading_diff = functions.calculate_heading(agent_pos, center_xz)
+
+    object_infos.append({
+        "id": sid,
+        "category": id_to_category[sid],
+        "center": center,
+        "distance": dist,
+        "heading_diff": heading_diff,
+    })
+
+nearest_objects = sorted(object_infos, key=lambda x: x["distance"])[:5]
+
+for obj in nearest_objects:
+    print(f" - ID {obj['id']} | {obj['category']}")
+    print(f"   ↳ center: {obj['center']}")
+    print(f"   ↳ distance: {obj['distance']:.2f} m")
+    print(f"   ↳ heading diff: {obj['heading_diff']:.2f}°")
 
 plt.figure(figsize=(10, 8))
 plt.imshow(rgb, cmap="tab20")
 plt.axis("off")
-plt.title(f"Semantic View for Region ID {region_id}")
+plt.title("Semantic View with ID and Category")
 
 for sid in valid_ids:
     mask = (semantic == sid)
@@ -179,10 +196,11 @@ for sid in valid_ids:
              color='white',
              ha='center', va='center',
              bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.3'))
-    plt.plot(x, y, 'ro', markersize=4)
+
+    plt.plot(x, y, 'ro', markersize=4) 
 
 plt.tight_layout()
 plt.show()
 
-# print("\n\033[91m============== Debugging ==============\033[0m")
-# print("\n\033[91m============== Finish ==============\033[0m")
+print("\n\033[91m============== Debugging ==============\033[0m")
+print("\n\033[91m============== Finish ==============\033[0m")

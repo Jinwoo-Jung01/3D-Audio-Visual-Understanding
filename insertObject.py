@@ -8,6 +8,7 @@ import numpy as np
 from magnum.platform.glfw import Application
 
 import habitat_sim
+import habitat_sim.utils.common as utils
 import matplotlib.pyplot as plt
 import numpy as np
 import open3d as o3d
@@ -22,18 +23,14 @@ import functions
 Research about .navmesh
 """
 
-if len(sys.argv) != 4:
-    print("\nmanual : python3 simulator.py <scene_id> <region_id> <use_default>")
-    print("example: python3 simulator.py 00800-TEEsavR23oF 1 True")
+if len(sys.argv) != 3:
+    print("\nmanual : python3 insertObject.py <scene_id> <region_id>")
+    print("example: python3 insertObject.py 00800-TEEsavR23oF 1")
     sys.exit(1)
 
 scene_id = sys.argv[1]
 scene_name = scene_id.split("-")[1]
 region_id = int(sys.argv[2])
-if sys.argv[3] not in ["True", "False"]:
-    print("Error: use_default must be True or False")
-    sys.exit(1)
-use_default = sys.argv[3]
 
 # make path automatically
 base_path = Path(__file__).resolve().parent
@@ -44,6 +41,8 @@ semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{sce
 navmesh_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
 scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/val/hm3d_annotated_val_basis.scene_dataset_config.json")
 json_path = str(base_path / f"data/format/val/{scene_id}_scene_info.json")
+# there should be *.object_config.json in same folder
+obj_path = "/home/jinwoo/AMILab/3D-Audio-Visual-Understanding/objaverse/SM_LampStand001.glb"
 
 # open3d objects
 sem_mesh = o3d.io.read_triangle_mesh(semantic_path)
@@ -55,10 +54,10 @@ mesh.compute_vertex_normals()
 axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
 
 # simulation setting
-roll_deg = 0
-pitch_deg = 0
-yaw_deg = 0
-rotation = np.array([np.radians(roll_deg), np.radians(pitch_deg), np.radians(yaw_deg)], dtype=np.float32) 
+agent_roll_deg = 0
+agent_pitch_deg = 0
+agent_yaw_deg = 0
+rotation = np.array([np.radians(agent_roll_deg), np.radians(agent_pitch_deg), np.radians(agent_yaw_deg)], dtype=np.float32) 
 
 sim_settings = {
     "width": 960,  # Spatial resolution of the observations
@@ -116,11 +115,29 @@ navigable_pcd_filtered = np.asarray(navigable_pcd_filtered.points)
 navigable_position = navigable_pcd_filtered[np.random.choice(len(navigable_pcd_filtered))]
 sampled_habitat_point = functions.convert_back_coordinate(navigable_position)
 
-if use_default == "False":
-    agent_state = sim.get_agent(0).get_state()
-    agent_state.position = sampled_habitat_point
-    agent_state.rotation = habitat_sim.utils.common.quat_from_angle_axis(0.0, np.array([0, 1.0, 0]))
-    sim.get_agent(0).set_state(agent_state)
+# print("\n\033[91m============== Debugging ==============\033[0m")
+
+# Get 3D object
+obj_template_mgr = sim.get_object_template_manager()
+rigid_obj_mgr = sim.get_rigid_object_manager()
+template_ids = obj_template_mgr.load_object_configs(obj_path)
+sphere_template_id = template_ids[0]
+object = rigid_obj_mgr.add_object_by_template_id(sphere_template_id)    # load 3d object by template_ids(from *.object_config.json)
+
+# Localize 3D object
+obj_position = np.array([-7.448947, 0.16337794, -3.682925])
+object.translation = obj_position
+
+obj_roll_deg = 0
+obj_pitch_deg = 0
+obj_yaw_deg = 0
+object.rotation = functions.calculate_rotation(obj_roll_deg, obj_pitch_deg, obj_yaw_deg)
+
+# Set agent position
+agent_state = sim.get_agent(0).get_state()
+agent_position = np.array([-7.448947, 0.16337794, -0.682925])
+agent_state.position = agent_position
+sim.get_agent(0).set_state(agent_state)
 
 # Get Camera's Image
 observations = sim.get_sensor_observations()
@@ -184,5 +201,4 @@ for sid in valid_ids:
 plt.tight_layout()
 plt.show()
 
-# print("\n\033[91m============== Debugging ==============\033[0m")
 # print("\n\033[91m============== Finish ==============\033[0m")

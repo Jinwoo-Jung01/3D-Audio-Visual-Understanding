@@ -346,7 +346,7 @@ def visualize_3D_scene(json_path, sem_mesh, semantic_color_map):
     # load json
     with open(json_path, "r") as f:
         scene_info = json.load(f)
-
+    print("1")
     # make 3D scene by json
     for region in scene_info["regions"]:
         region_id = region["region_id"]
@@ -437,3 +437,30 @@ def create_bbox_from_json(region, semantic_color_map, target_categories=None, pr
         bboxes.append(bbox)
 
     return bboxes
+
+def calculate_heading(agent_pos_xz, object_pos_xz):
+    """
+    agent_pos_xz: np.array([x, z])
+    object_pos_xz: np.array([x, z])
+    """
+    vec = object_pos_xz - agent_pos_xz 
+    # Agent 기준 -z방향을 바라고 Camear가 생성됨
+    # Habitat-Sim 기준 z방향
+    forward_2d = np.array([0, -1])      
+
+    unit_v = vec / np.linalg.norm(vec)
+    dot = np.clip(np.dot(forward_2d, unit_v), -1.0, 1.0)
+    angle_rad = np.arccos(dot)
+
+    cross = forward_2d[0] * unit_v[1] - forward_2d[1] * unit_v[0]
+    if cross < 0:
+        angle_rad = -angle_rad
+
+    return np.degrees(angle_rad)
+
+def calculate_rotation(obj_roll_deg, obj_pitch_deg, obj_yaw_deg):
+    q_x = mn.Quaternion.rotation(mn.Deg(obj_roll_deg), mn.Vector3.x_axis())
+    q_y = mn.Quaternion.rotation(mn.Deg(obj_yaw_deg), mn.Vector3.y_axis())
+    q_z = mn.Quaternion.rotation(mn.Deg(obj_pitch_deg), mn.Vector3.z_axis())
+    
+    return q_y * q_z * q_x
