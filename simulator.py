@@ -37,12 +37,13 @@ use_default = sys.argv[3]
 
 # make path automatically
 base_path = Path(__file__).resolve().parent
-scene_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.basis.glb")
-semantic_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
-semanticTXT_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
-navmesh_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
-scene_cfg_path = str(base_path / "data/scene_datasets/hm3d/hm3d_annotated_minival_basis.scene_dataset_config.json")
-json_path = str(base_path / f"format/region_{region_id}_info.json")
+base_path = Path("/home/jinwoo/AMILab")
+scene_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.glb")
+semantic_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
+semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
+navmesh_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
+scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/val/hm3d_annotated_val_basis.scene_dataset_config.json")
+json_path = str(base_path / f"data/format/val/{scene_id}_scene_info.json")
 
 # open3d objects
 sem_mesh = o3d.io.read_triangle_mesh(semantic_path)
@@ -152,23 +153,23 @@ for ax, img, title in zip(axes, images, titles):
 plt.tight_layout()
 plt.show()
 
-
 with open(json_path, 'r') as f:
     region_info = json.load(f)
 
-id_to_category = {obj["semantic_id"]: obj["category"] for obj in region_info["objects"]}
-unique_ids = np.unique(semantic)
+room_objects = next((r["objects"] for r in region_info["regions"] if r["region_id"] == region_id), [])
+id_to_category = {obj["semantic_id"]: obj["category"] for obj in room_objects}
 
+unique_ids = np.unique(semantic)
 valid_ids = [sid for sid in unique_ids if sid in id_to_category]
 
-print(f"\n현재 뷰에 존재하는 semantic ID와 category:")
-for sid in valid_ids:
-    print(f"  - ID {sid}: {id_to_category[sid]}")
+# print(f"\n[ Region ID = {region_id} ]에 존재하는 semantic ID와 category:")
+# for sid in valid_ids:
+#     print(f"  - ID {sid}: {id_to_category[sid]}")
 
 plt.figure(figsize=(10, 8))
 plt.imshow(rgb, cmap="tab20")
 plt.axis("off")
-plt.title("Semantic View with ID and Category")
+plt.title(f"Semantic View for Region ID {region_id}")
 
 for sid in valid_ids:
     mask = (semantic == sid)
@@ -179,11 +180,10 @@ for sid in valid_ids:
              color='white',
              ha='center', va='center',
              bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.3'))
-
-    plt.plot(x, y, 'ro', markersize=4) 
+    plt.plot(x, y, 'ro', markersize=4)
 
 plt.tight_layout()
 plt.show()
 
-print("\n\033[91m============== Debugging ==============\033[0m")
-print("\n\033[91m============== Finish ==============\033[0m")
+# print("\n\033[91m============== Debugging ==============\033[0m")
+# print("\n\033[91m============== Finish ==============\033[0m")
