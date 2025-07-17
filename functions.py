@@ -10,6 +10,7 @@ import open3d as o3d
 import sys
 from pathlib import Path
 import json
+import networkx as nx
 
 def make_custome_cfg(settings):
     sim_cfg = habitat_sim.SimulatorConfiguration()
@@ -342,7 +343,7 @@ def make_3D_scene_json(scene, scene_id, scene_name, save_path):
 
     print(f"[INFO] Saved full scene info to: {save_path}")
 
-def visualize_3D_scene(json_path, sem_mesh, semantic_color_map):
+def visualize_3D_scene(json_path, sem_mesh, semantic_color_map, target_region_id=1, geometries=None):
     # load json
     with open(json_path, "r") as f:
         scene_info = json.load(f)
@@ -350,6 +351,10 @@ def visualize_3D_scene(json_path, sem_mesh, semantic_color_map):
     # make 3D scene by json
     for region in scene_info["regions"]:
         region_id = region["region_id"]
+
+        if target_region_id is not None and region_id != target_region_id:
+            continue
+
         print(f"[INFO] Visualizing region_id: {region_id}")
 
         bbox = create_bbox_from_json(region, semantic_color_map, 'floor')
@@ -370,7 +375,11 @@ def visualize_3D_scene(json_path, sem_mesh, semantic_color_map):
         cropped = sem_mesh.crop(roi_bbox)
 
         print(f"[INFO] Cropped region {region_id} — Object count: {region['object_count']}")
-        o3d.visualization.draw_geometries([cropped] + bboxes)
+        if geometries != None:
+            o3d.visualization.draw_geometries([cropped] + bboxes + geometries)
+        else:
+            o3d.visualization.draw_geometries([cropped] + bboxes)
+            
 
 def create_bboxes_from_json(region_data, semantic_color_map, target_categories=None, print_info=False):
     """
@@ -464,3 +473,67 @@ def calculate_rotation(obj_roll_deg, obj_pitch_deg, obj_yaw_deg):
     q_z = mn.Quaternion.rotation(mn.Deg(obj_pitch_deg), mn.Vector3.z_axis())
     
     return q_y * q_z * q_x
+
+def load_objects_from_json(json_path, target_region_id):
+    with open(json_path, 'r') as f:
+        scene_info = json.load(f)
+
+    objects = []
+    for region in scene_info["regions"]:
+        if region["region_id"] != target_region_id:
+            continue
+
+        for obj in region["objects"]:
+            objects.append({
+                "name": f"{region['region_id']}_{obj['semantic_id']}",
+                "center": convert_cordinate(obj["center"]),
+                "class": obj["category"],
+                "semantic_id": obj["semantic_id"]
+            })
+
+    return objects
+
+def visualize_subgraph(G, target_node):
+
+    if target_node not in G:
+        print(f"[ERROR] Node {target_node} not found in the graph.")
+        return
+
+    neighbors = list(G.neighbors(target_node))
+    sub_nodes = [target_node] + neighbors
+
+    # 노드들만 추출
+    geometries = []
+    for node in sub_nodes:
+        pos = np.array(G.nodes[node]['pos'])
+        color = G.nodes[node]['color']
+        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.1 if node == target_node else 0.08)
+        sphere.translate(pos)
+        sphere.paint_uniform_color([1, 0, 0] if node == target_node else color)  # 중심 노드는 빨간색
+        sphere.compute_vertex_normals()
+        geometries.append(sphere)
+
+    # 엣지들만 추출
+    lines = []
+    colors = []
+    points = []
+    point_idx_map = {}
+
+    for i, node in enumerate(sub_nodes):
+        point_idx_map[node] = i
+        points.append(G.nodes[node]['pos'])
+
+    for neighbor in neighbors:
+        lines.append([point_idx_map[target_node], point_idx_map[neighbor]])
+        colors.append([1, 0, 0])  # 파란색 선
+
+    line_set = o3d.geometry.LineSet(
+        points=o3d.utility.Vector3dVector(points),
+        lines=o3d.utility.Vector2iVector(lines),
+    )
+    line_set.colors = o3d.utility.Vector3dVector(colors)
+    geometries.append(line_set)
+
+    print(f"[INFO] Visualizing {target_node} and its {len(neighbors)} neighbors.")
+
+    return geometries
