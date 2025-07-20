@@ -24,13 +24,15 @@ Research about .navmesh
 """
 
 if len(sys.argv) != 3:
-    print("\nmanual : python3 insertObject.py <scene_id> <region_id>")
-    print("example: python3 insertObject.py 00800-TEEsavR23oF 1")
+    print("\nmanual : python3 main_insertObj.py <scene_id> <region_id>")
+    print("example: python3 main_insertObj.py 00800-TEEsavR23oF 1")
     sys.exit(1)
 
 scene_id = sys.argv[1]
 scene_name = scene_id.split("-")[1]
 region_id = int(sys.argv[2])
+
+THR_RESAMPLE_CNT = 3
 
 # make path automatically
 base_path = Path(__file__).resolve().parent
@@ -54,7 +56,7 @@ mesh.compute_vertex_normals()
 axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
 
 # simulation setting
-agent_roll_deg = 0
+agent_roll_deg = -20
 agent_pitch_deg = 0
 agent_yaw_deg = 0
 rotation = np.array([np.radians(agent_roll_deg), np.radians(agent_pitch_deg), np.radians(agent_yaw_deg)], dtype=np.float32) 
@@ -74,31 +76,25 @@ sim_settings = {
     "seed": 1,
 }
 
-# set simulation
 cfg = functions.make_custome_cfg(sim_settings)
 sim = habitat_sim.Simulator(cfg)
-scene = sim.semantic_scene              # semantic scnene
+semantic_scene = sim.semantic_scene              
 semantic_color_map = functions.load_semantic_colors(semanticTXT_path)
 sim.pathfinder.load_nav_mesh(navmesh_path)
 
-## 1. Filtering based on specific room
+## Crop based on region_id
+o_bbox_floor = functions.create_bbox_from_scene(semantic_scene, semantic_color_map, region_id, 'floor')
+# o_bboxes = functions.create_bboxes_from_scene(semantic_scene, semantic_color_map, region_id)
+exclude = ['ceiling', 'floor', 'floor_mat']
+o_bboxes = functions.create_bboxes_from_scene_exclude(semantic_scene, semantic_color_map, region_id, exclude_categories=exclude)
 
-# Make RoI Bbox
-bbox = functions.create_bbox_from_scene(scene, semantic_color_map, region_id, 'floor')
-bboxes = functions.create_bboxes_from_scene(scene, semantic_color_map, region_id)
+z_max_list = [bbox.get_max_bound()[2] for bbox in o_bboxes]
+min_bound = o_bbox_floor[0].get_min_bound()  
+max_bound = o_bbox_floor[0].get_max_bound()  
+roi_bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound, np.array([max_bound[0], max_bound[1], max(z_max_list)]))
+roi_bbox.color = o_bbox_floor[0].color  # RoI BBox for room
 
-z_max_list = [bbox.get_max_bound()[2] for bbox in bboxes]
-
-min_bound = bbox[0].get_min_bound()  
-max_bound = bbox[0].get_max_bound()  
-new_max_bound = np.array([max_bound[0], max_bound[1], max(z_max_list)])
-roi_bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound, new_max_bound)
-roi_bbox.color = bbox[0].color  
-
-# Make Cropped Semantic Mesh
-sem_cropped = sem_mesh.crop(roi_bbox) 
-
-# Make Filtered Navigable PCD
+# crop navigable points
 points = functions.sample_navmesh_points(sim, num_points=5000)
 
 pcd = o3d.geometry.PointCloud()
@@ -108,35 +104,109 @@ pcd.paint_uniform_color([0.2, 0.8, 0.2])
 indices = roi_bbox.get_point_indices_within_bounding_box(pcd.points)
 navigable_pcd_filtered = pcd.select_by_index(indices)
 
-## 2. Render and display RGB Image
-
-# Set agent's position based on navigable point
+# select random point
 navigable_pcd_filtered = np.asarray(navigable_pcd_filtered.points)
-navigable_position = navigable_pcd_filtered[np.random.choice(len(navigable_pcd_filtered))]
-sampled_habitat_point = functions.convert_back_coordinate(navigable_position)
-
-# print("\n\033[91m============== Debugging ==============\033[0m")
+o_navigable_point = navigable_pcd_filtered[np.random.choice(len(navigable_pcd_filtered))]
+h_navigable_point = functions.convert_back_coordinate(o_navigable_point)
 
 # Get 3D object
 obj_template_mgr = sim.get_object_template_manager()
 rigid_obj_mgr = sim.get_rigid_object_manager()
 template_ids = obj_template_mgr.load_object_configs(obj_path)
 sphere_template_id = template_ids[0]
-object = rigid_obj_mgr.add_object_by_template_id(sphere_template_id)    # load 3d object by template_ids(from *.object_config.json)
 
-# Localize 3D object
-obj_position = np.array([-7.448947, 0.16337794, -3.682925])
-object.translation = obj_position
+h_bboxes = []
+for o_bbox in o_bboxes:
+    h_bbox_min = np.minimum(functions.convert_back_coordinate(o_bbox.get_min_bound()), functions.convert_back_coordinate(o_bbox.get_max_bound()))
+    h_bbox_max = np.maximum(functions.convert_back_coordinate(o_bbox.get_min_bound()), functions.convert_back_coordinate(o_bbox.get_max_bound()))
+    h_bboxes.append((h_bbox_min, h_bbox_max))
 
-obj_roll_deg = 0
-obj_pitch_deg = 0
-obj_yaw_deg = 0
-object.rotation = functions.calculate_rotation(obj_roll_deg, obj_pitch_deg, obj_yaw_deg)
+b_oclusion = True
+
+for attempt in range(THR_RESAMPLE_CNT):
+
+    o_navigable_point_obj = navigable_pcd_filtered[np.random.choice(len(navigable_pcd_filtered))]
+    if np.array_equal(o_navigable_point_obj, o_navigable_point):
+        continue
+
+    h_navigable_point_obj = functions.convert_back_coordinate(o_navigable_point_obj)
+
+    # object's coordinate -> Open3d based!!
+    # # -------------------------------------------- if u want to chage scale --------------------------------------------
+    # template = obj_template_mgr.get_template_by_id(sphere_template_id)
+    # template.scale = np.array([2.0, 2.0, 2.0])
+    # handle = template.handle
+    # new_template_id = obj_template_mgr.register_template(template, specified_handle=handle, force_registration=True)
+    # # ----------------------------------------------------------------------------------------------------------------
+
+    object = rigid_obj_mgr.add_object_by_template_id(sphere_template_id)
+    h_object_aabb = object.root_scene_node.cumulative_bb
+
+    object.translation = mn.Vector3(
+        h_navigable_point_obj[0],
+        h_navigable_point_obj[1] + h_object_aabb.max[1],
+        h_navigable_point_obj[2]
+    )
+
+    obj_roll_deg = 0
+    obj_pitch_deg = 0
+    obj_yaw_deg = 0
+    object.rotation = functions.calculate_rotation(obj_roll_deg, obj_pitch_deg, obj_yaw_deg)
+
+    # object info
+    h_obj_bbox = (np.array(h_object_aabb.min) + h_navigable_point_obj,
+                  np.array(h_object_aabb.max) + h_navigable_point_obj)
+    h_obj_xz = functions.aabb_to_xz_box(h_obj_bbox)
+
+    b_oclusion = False
+    for h_bbox in h_bboxes:
+        h_bbox_xz = functions.aabb_to_xz_box(h_bbox)
+        iou = functions.compute_2d_iou(h_obj_xz, h_bbox_xz)
+        if iou != 0.0:
+            b_oclusion = True
+            print(f"[Resample {attempt+1}] Occluded (IoU={iou:.4f})")
+
+            # ---------------------- for debug ----------------------
+            if attempt+1 != THR_RESAMPLE_CNT:
+                rigid_obj_mgr.remove_object_by_id(object.object_id)
+            #--------------------------------------------------------
+            break
+
+    if not b_oclusion:
+        print(f"[Resample {attempt+1}] Not Occluded")
+        break
+
+if b_oclusion:
+    print(f"[Warning] All {THR_RESAMPLE_CNT} attempts failed: 여전히 Occluded 상태입니다.")
 
 # Set agent position
+agent_position = h_navigable_point
+look_at_target = h_navigable_point_obj  # agent가 바라볼 대상
+
+# 방향 벡터 계산 (target - position)
+forward = mn.Vector3(look_at_target) - mn.Vector3(agent_position)
+forward = forward.normalized()
+
+# 회전 행렬 계산
+rotation_mat = mn.Matrix4.look_at(
+    eye=mn.Vector3(agent_position),
+    target=mn.Vector3(look_at_target),
+    up=mn.Vector3(0.0, 1.0, 0.0)
+).rotation()
+
+# 회전 행렬 → 쿼터니언
+agent_rot = mn.Quaternion.from_matrix(rotation_mat)
+quat_np = np.array([
+    agent_rot.vector.x,
+    agent_rot.vector.y,
+    agent_rot.vector.z,
+    agent_rot.scalar
+], dtype=np.float32)
+
+# 에이전트 상태 적용
 agent_state = sim.get_agent(0).get_state()
-agent_position = np.array([-12.00324917, 0.54230416, -3.74175334])
 agent_state.position = agent_position
+agent_state.rotation = quat_np
 sim.get_agent(0).set_state(agent_state)
 # Get Camera's Image
 observations = sim.get_sensor_observations()
@@ -172,6 +242,9 @@ for ax, img, title in zip(axes, images, titles):
 plt.tight_layout()
 plt.show()
 
+functions.draw_xz_boxes(h_obj_xz, [functions.aabb_to_xz_box(w) for w in h_bboxes])
+
+
 # with open(json_path, 'r') as f:
 #     region_info = json.load(f)
 
@@ -199,5 +272,3 @@ plt.show()
 
 # plt.tight_layout()
 # plt.show()
-
-# print("\n\033[91m============== Finish ==============\033[0m")

@@ -1,13 +1,8 @@
 {
     "render_asset": "SM_LampStand001.glb",
-    "collision_asset": "SM_LampStand001.glb",
-    "mass": 1.0,
-    "margin": 0.01,
     "scale": [
         1.0,
         1.0,
         1.0
-    ],
-    "use_bounding_box_for_collision": true,
-    "join_collision_meshes": true
+    ]
 }
