@@ -10,6 +10,8 @@ import open3d as o3d
 import sys
 from pathlib import Path
 import json
+import networkx as nx
+from matplotlib.patches import Rectangle
 
 def make_custome_cfg(settings):
     sim_cfg = habitat_sim.SimulatorConfiguration()
@@ -52,7 +54,8 @@ def make_custome_cfg(settings):
     agent_cfg.sensor_specifications = sensor_specs
     agent_cfg.action_space = {
         "move_forward": habitat_sim.agent.ActionSpec(
-            "move_forward", habitat_sim.agent.ActuationSpec(amount=0.25)
+            "move_forward", habitat_sim.agent.ActuationSpec(amount=0.0)
+            # "move_forward", habitat_sim.agent.ActuationSpec(amount=0.25)
         ),
         "turn_left": habitat_sim.agent.ActionSpec(
             "turn_left", habitat_sim.agent.ActuationSpec(amount=30.0)
@@ -293,6 +296,9 @@ def make_custome_cfg_rotation(settings):
         "turn_right": habitat_sim.agent.ActionSpec(
             "turn_right", habitat_sim.agent.ActuationSpec(amount=30.0)
         ),
+        "noop": habitat_sim.agent.ActionSpec(
+            "noop", habitat_sim.agent.ActuationSpec(amount=0.0)
+        ),
     }
 
     return habitat_sim.Configuration(sim_cfg, [agent_cfg])
@@ -342,7 +348,7 @@ def make_3D_scene_json(scene, scene_id, scene_name, save_path):
 
     print(f"[INFO] Saved full scene info to: {save_path}")
 
-def visualize_3D_scene(json_path, sem_mesh, semantic_color_map):
+def visualize_3D_scene(json_path, sem_mesh, semantic_color_map, target_region_id=1, geometries=None):
     # load json
     with open(json_path, "r") as f:
         scene_info = json.load(f)
@@ -350,6 +356,10 @@ def visualize_3D_scene(json_path, sem_mesh, semantic_color_map):
     # make 3D scene by json
     for region in scene_info["regions"]:
         region_id = region["region_id"]
+
+        if target_region_id is not None and region_id != target_region_id:
+            continue
+
         print(f"[INFO] Visualizing region_id: {region_id}")
 
         bbox = create_bbox_from_json(region, semantic_color_map, 'floor')
@@ -370,7 +380,11 @@ def visualize_3D_scene(json_path, sem_mesh, semantic_color_map):
         cropped = sem_mesh.crop(roi_bbox)
 
         print(f"[INFO] Cropped region {region_id} — Object count: {region['object_count']}")
-        o3d.visualization.draw_geometries([cropped] + bboxes)
+        if geometries != None:
+            o3d.visualization.draw_geometries([cropped] + bboxes + geometries)
+        else:
+            o3d.visualization.draw_geometries([cropped] + bboxes)
+            
 
 def create_bboxes_from_json(region_data, semantic_color_map, target_categories=None, print_info=False):
     """
@@ -464,3 +478,195 @@ def calculate_rotation(obj_roll_deg, obj_pitch_deg, obj_yaw_deg):
     q_z = mn.Quaternion.rotation(mn.Deg(obj_pitch_deg), mn.Vector3.z_axis())
     
     return q_y * q_z * q_x
+
+def load_objects_from_json(json_path, target_region_id):
+    with open(json_path, 'r') as f:
+        scene_info = json.load(f)
+
+    objects = []
+    for region in scene_info["regions"]:
+        if region["region_id"] != target_region_id:
+            continue
+
+        for obj in region["objects"]:
+            objects.append({
+                "name": f"{region['region_id']}_{obj['semantic_id']}",
+                "center": convert_cordinate(obj["center"]),
+                "class": obj["category"],
+                "semantic_id": obj["semantic_id"]
+            })
+
+    return objects
+
+def load_all_objects_from_json(json_path):
+    with open(json_path, 'r') as f:
+        scene_info = json.load(f)
+
+    objects = []
+    for region in scene_info["regions"]:
+
+        for obj in region["objects"]:
+            objects.append({
+                "name": f"{region['region_id']}_{obj['semantic_id']}",
+                "center": convert_cordinate(obj["center"]),
+                "class": obj["category"],
+                "semantic_id": obj["semantic_id"]
+            })
+
+    return objects
+
+def visualize_subgraph(G, target_node):
+
+    if target_node not in G:
+        print(f"[ERROR] Node {target_node} not found in the graph.")
+        return
+
+    neighbors = list(G.neighbors(target_node))
+    sub_nodes = [target_node] + neighbors
+
+    # 노드들만 추출
+    geometries = []
+    for node in sub_nodes:
+        pos = np.array(G.nodes[node]['pos'])
+        color = G.nodes[node]['color']
+        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.1 if node == target_node else 0.08)
+        sphere.translate(pos)
+        sphere.paint_uniform_color([1, 0, 0] if node == target_node else color)  # 중심 노드는 빨간색
+        sphere.compute_vertex_normals()
+        geometries.append(sphere)
+
+    # 엣지들만 추출
+    lines = []
+    colors = []
+    points = []
+    point_idx_map = {}
+
+    for i, node in enumerate(sub_nodes):
+        point_idx_map[node] = i
+        points.append(G.nodes[node]['pos'])
+
+    for neighbor in neighbors:
+        lines.append([point_idx_map[target_node], point_idx_map[neighbor]])
+        colors.append([1, 0, 0])  # 파란색 선
+
+    line_set = o3d.geometry.LineSet(
+        points=o3d.utility.Vector3dVector(points),
+        lines=o3d.utility.Vector2iVector(lines),
+    )
+    line_set.colors = o3d.utility.Vector3dVector(colors)
+    geometries.append(line_set)
+
+    print(f"[INFO] Visualizing {target_node} and its {len(neighbors)} neighbors.")
+
+    return geometries
+
+def compute_2d_iou(box1, box2):
+    """
+    Compute 2D IoU in XZ plane between two AABBs.
+    Each box is given as (min_x, min_z, max_x, max_z)
+    """
+    # Intersection
+    x_left = max(box1[0], box2[0])
+    z_top = max(box1[1], box2[1])
+    x_right = min(box1[2], box2[2])
+    z_bottom = min(box1[3], box2[3])
+
+    if x_right <= x_left or z_bottom <= z_top:
+        return 0.0  # No overlap
+
+    inter_area = (x_right - x_left) * (z_bottom - z_top)
+    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+
+    union_area = area1 + area2 - inter_area
+    return inter_area / union_area
+
+def aabb_to_xz_box(aabb):
+    if hasattr(aabb, "get_min_bound"):
+        min_b = np.array(aabb.get_min_bound())
+        max_b = np.array(aabb.get_max_bound())
+    else:
+        min_b, max_b = aabb  # assume tuple
+        min_b = np.array(min_b)
+        max_b = np.array(max_b)
+
+    return (min_b[0], min_b[2], max_b[0], max_b[2])
+
+def draw_xz_boxes(object_box, wall_boxes):
+    fig, ax = plt.subplots()
+
+    # Draw object box (red)
+    ox1, oz1, ox2, oz2 = object_box
+    ax.add_patch(Rectangle((ox1, oz1), ox2 - ox1, oz2 - oz1,
+                           linewidth=2, edgecolor='red', facecolor='none', label='Object'))
+
+    # Draw wall boxes (blue)
+    for i, wall in enumerate(wall_boxes):
+        wx1, wz1, wx2, wz2 = wall
+        ax.add_patch(Rectangle((wx1, wz1), wx2 - wx1, wz2 - wz1,
+                               linewidth=1.5, edgecolor='blue', facecolor='none'))
+        ax.text((wx1 + wx2) / 2, (wz1 + wz2) / 2, f'Obj {i}', fontsize=8, color='blue', ha='center')
+
+    # Center axes lines at (0, 0)
+    ax.axhline(0, color='gray', linestyle='--', linewidth=1)
+    ax.axvline(0, color='gray', linestyle='--', linewidth=1)
+
+    # Set axis limits to include negative ranges
+    all_x = [ox1, ox2] + [wx1 for wx1, _, wx2, _ in wall_boxes] + [wx2 for _, _, wx2, _ in wall_boxes]
+    all_z = [oz1, oz2] + [wz1 for _, wz1, _, wz2 in wall_boxes] + [wz2 for _, _, _, wz2 in wall_boxes]
+    margin = 0.5
+
+    ax.set_xlim(min(all_x) - margin, max(all_x) + margin)
+    ax.set_ylim(min(all_z) - margin, max(all_z) + margin)
+
+    ax.set_xlabel("X")
+    ax.set_ylabel("Z")
+    ax.set_title("XZ Plane Bounding Boxes (Including Negative Coordinates)")
+    ax.set_aspect('equal')
+    ax.legend()
+    plt.grid(True)
+    plt.show()
+
+def create_bboxes_from_scene_exclude(scene, semantic_color_map, region_id, print_info=False, exclude_categories=None):
+    """
+    Create Open3D BBoxes for all objects in a specified region of the SemanticScene
+
+    Args:
+        scene: habitat_sim.semantic_scene object
+        semantic_color_map: dict {semantic_id: [r, g, b]}
+        region_id: int, the target region index
+        print_info: bool, whether to print object info
+        exclude_categories: list of category names to exclude (e.g., ['ceiling', 'floor'])
+
+    Returns:
+        bboxes: list of Open3D AxisAlignedBoundingBox
+    """
+    bboxes = []
+    found = False
+    for region in scene.regions:
+        region_index = int(region.id.split("_")[-1])
+        if region_index != region_id:
+            continue
+
+        found = True
+        for obj in region.objects:
+            if np.any(np.isinf(obj.aabb.sizes)) or np.all(obj.aabb.sizes == 0):
+                continue
+
+            category_name = obj.category.name()
+            if exclude_categories and category_name in exclude_categories:
+                continue
+
+            color = semantic_color_map.get(obj.semantic_id, [1, 0, 0])
+            bbox = create_bbox(obj.aabb.center, obj.aabb.sizes, color=color)
+            if print_info:
+                print(f"Object id: {obj.semantic_id}, category: {category_name}, "
+                      f"center: {obj.aabb.center}, dims: {obj.aabb.sizes}")
+            bboxes.append(bbox)
+        break
+
+    if not found:
+        print(f"[ERROR] Region with index {region_id} not found in the semantic scene")
+        exit(1)
+
+    return bboxes

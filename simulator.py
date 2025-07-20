@@ -36,8 +36,7 @@ if sys.argv[3] not in ["True", "False"]:
 use_default = sys.argv[3]
 
 # make path automatically
-base_path = Path(__file__).resolve().parent
-base_path = Path("/home/jinwoo/AMILab")
+base_path = Path(__file__).resolve().parent.parent
 scene_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.glb")
 semantic_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
 semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.txt")

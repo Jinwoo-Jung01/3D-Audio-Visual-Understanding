@@ -32,13 +32,13 @@ if sys.argv[3] not in ["True", "False"]:
 use_default = sys.argv[3]
 
 # make path automatically
-base_path = Path(__file__).resolve().parent
-scene_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.basis.glb")
-semantic_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
-semanticTXT_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
-navmesh_path = str(base_path / f"data/scene_datasets/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
-scene_cfg_path = str(base_path / "data/scene_datasets/hm3d/hm3d_annotated_minival_basis.scene_dataset_config.json")
-json_path = str(base_path / f"format/region_{region_id}_info.json")
+base_path = Path(__file__).resolve().parent.parent
+scene_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.glb")
+semantic_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
+semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
+navmesh_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
+scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/val/hm3d_annotated_val_basis.scene_dataset_config.json")
+json_path = str(base_path / f"data/format/val/{scene_id}_scene_info.json")
 
 # open3d objects
 sem_mesh = o3d.io.read_triangle_mesh(semantic_path)
@@ -150,8 +150,9 @@ plt.show()
 with open(json_path, 'r') as f:
     region_info = json.load(f)
 
-id_to_center = {obj["semantic_id"]: np.array(obj["center"]) for obj in region_info["objects"]}
-id_to_category = {obj["semantic_id"]: obj["category"] for obj in region_info["objects"]}
+room_objects = next((r["objects"] for r in region_info["regions"] if r["region_id"] == region_id), [])
+id_to_center = {obj["semantic_id"]: np.array(obj["center"]) for obj in room_objects}
+id_to_category = {obj["semantic_id"]: obj["category"] for obj in room_objects}
 
 unique_ids = np.unique(semantic)
 valid_ids = [sid for sid in unique_ids if sid in id_to_center]
@@ -202,5 +203,47 @@ for sid in valid_ids:
 plt.tight_layout()
 plt.show()
 
-print("\n\033[91m============== Debugging ==============\033[0m")
-print("\n\033[91m============== Finish ==============\033[0m")
+# print("\n\033[91m============== Debugging ==============\033[0m")
+
+# import networkx as nx
+# import matplotlib.pyplot as plt
+
+# # 그래프 초기화
+# G = nx.DiGraph()
+
+# # Agent 노드 추가 (id: 'agent')
+# G.add_node("agent", pos=tuple(agent_pos))
+
+# # 객체 노드 및 edge 추가
+# for obj in nearest_objects:
+#     obj_id = obj['id']
+#     center = obj['center']
+#     center_xz = (float(center[0]), float(center[2]))
+
+#     G.add_node(obj_id, pos=center_xz, label=obj['category'])
+#     G.add_edge("agent", obj_id, distance=obj['distance'], heading=obj['heading_diff'])
+
+# # 위치 추출
+# pos = nx.get_node_attributes(G, 'pos')
+# labels = nx.get_node_attributes(G, 'label')
+
+# # 시각화
+# plt.figure(figsize=(8, 6))
+# nx.draw(G, pos, with_labels=True, node_size=800, node_color='skyblue', font_size=10, font_weight='bold')
+# nx.draw_networkx_nodes(G, pos, nodelist=["agent"], node_color='red', node_size=900)
+
+# # 방향 및 거리 정보 표시
+# edge_labels = {
+#     (u, v): f"{G[u][v]['distance']:.2f}m\n{G[u][v]['heading']:.1f}°"
+#     for u, v in G.edges()
+# }
+# nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=9)
+
+# plt.title("Top-5 Nearest Objects in XZ Plane")
+# plt.grid(True)
+# plt.axis("equal")
+# plt.tight_layout()
+# plt.show()
+
+
+# print("\n\033[91m============== Finish ==============\033[0m")
