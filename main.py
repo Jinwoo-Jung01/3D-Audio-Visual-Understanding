@@ -47,12 +47,13 @@ EXCLUDE_CATEGORIES = ['wall', 'floor', 'stairs', 'unknown']
 ## Basic Setting
 # make path automatically
 base_path = Path(__file__).resolve().parent.parent
-scene_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.glb")
-semantic_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
-semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
-navmesh_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
-scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/val/hm3d_annotated_val_basis.scene_dataset_config.json")
-json_path = str(base_path / f"data/format/val/{scene_id}_scene_info.json")
+scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/hm3d_annotated_basis.scene_dataset_config.json")
+top_folder = functions.find_parent_folder(scene_cfg_path, scene_id)
+scene_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.basis.glb")
+semantic_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.semantic.glb")
+semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.semantic.txt")
+navmesh_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.basis.navmesh")
+json_path = str(base_path / f"data/format/{top_folder}/{scene_id}_scene_info.json")
 
 # load mesh
 sem_mesh = o3d.io.read_triangle_mesh(semantic_path)
