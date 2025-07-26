@@ -20,8 +20,8 @@ from scipy.spatial.distance import euclidean
 import functions
 
 if len(sys.argv) != 3:
-    print("\nmanual : python3 loadScenebyJSON.py <scene_id> <region_id>")
-    print("example: python3 loadScenebyJSON.py 00006-HkseAnWCgqk 1")
+    print("\nmanual : python3 makeSceneGraph.py <scene_id> <region_id>")
+    print("example: python3 makeSceneGraph.py 00006-HkseAnWCgqk 1")
     sys.exit(1)
 
 scene_id = sys.argv[1]
@@ -101,7 +101,7 @@ line_set.colors = o3d.utility.Vector3dVector(colors)
 geometries.append(line_set)
 
 # Visualization
-# o3d.visualization.draw_geometries(geometries)
+o3d.visualization.draw_geometries(geometries)
 sub_geometries = functions.visualize_subgraph(G, target_node="1_39")
 functions.visualize_3D_scene(json_path, sem_mesh, semantic_color_map, region_id, geometries)
 

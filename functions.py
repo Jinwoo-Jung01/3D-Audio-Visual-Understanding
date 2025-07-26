@@ -670,3 +670,19 @@ def create_bboxes_from_scene_exclude(scene, semantic_color_map, region_id, print
         exit(1)
 
     return bboxes
+
+
+def find_parent_folder(config_path, scene_id):
+    """
+    Given the config JSON path and a scene_id, return top-level folder (e.g., 'val', 'train', 'test').
+    """
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+
+    glb_paths = config.get("stages", {}).get("paths", {}).get(".glb", [])
+
+    for path_str in glb_paths:
+        if scene_id in path_str:
+            return Path(path_str).parts[0]
+
+    raise ValueError(f"Scene ID '{scene_id}' not found in .glb paths.")

@@ -23,28 +23,30 @@ import functions
 Research about .navmesh
 """
 
-if len(sys.argv) != 3:
-    print("\nmanual : python3 main_insertObj.py <scene_id> <region_id>")
-    print("example: python3 main_insertObj.py 00800-TEEsavR23oF 1")
+if len(sys.argv) != 4:
+    print("\nmanual : python3 main_insertObj.py <scene_id> <region_id> <object_path>")
+    print("example: python3 main_insertObj.py 00800-TEEsavR23oF 1 objaverse/SM_LampStand001.glb")
     sys.exit(1)
 
 scene_id = sys.argv[1]
 scene_name = scene_id.split("-")[1]
 region_id = int(sys.argv[2])
+object_path = sys.argv[3]
 
 THR_RESAMPLE_CNT = 3
 
 # make path automatically
-base_path = Path(__file__).resolve().parent
-base_path = Path("/home/jinwoo/AMILab")
-scene_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.glb")
-semantic_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
-semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
-navmesh_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
-scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/val/hm3d_annotated_val_basis.scene_dataset_config.json")
-json_path = str(base_path / f"data/format/val/{scene_id}_scene_info.json")
+base_path = Path(__file__).resolve().parent.parent
+scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/hm3d_annotated_basis.scene_dataset_config.json")
+top_folder = functions.find_parent_folder(scene_cfg_path, scene_id)
+scene_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.basis.glb")
+semantic_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.semantic.glb")
+semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.semantic.txt")
+navmesh_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.basis.navmesh")
+json_path = str(base_path / f"data/format/{top_folder}/{scene_id}_scene_info.json")
+
 # there should be *.object_config.json in same folder
-obj_path = "/home/jinwoo/AMILab/3D-Audio-Visual-Understanding/objaverse/SM_LampStand001.glb"
+obj_path = str(base_path / object_path)
 
 # open3d objects
 sem_mesh = o3d.io.read_triangle_mesh(semantic_path)

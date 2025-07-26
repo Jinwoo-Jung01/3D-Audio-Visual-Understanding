@@ -19,22 +19,24 @@ import time
 import functions
 
 if len(sys.argv) != 2:
-    print("\nUsage: python3 makeAllSceneJSON.py <scene_parent_folder>")
-    print("Example: python3 makeAllSceneJSON.py data/scene_datasets/hm3d/val")
+    print("\nmanual: python3 makeAllSceneJSON.py <scene_parent_folder>")
+    print("Example: python3 makeAllSceneJSON.py data/scene_dataset/hm3d/val")
     sys.exit(1)
 
-scene_parent_dir = Path(sys.argv[1]).resolve()
-scene_cfg_path = "/home/jinwoo/AMILab/data/scene_dataset/hm3d/val/hm3d_annotated_val_basis.scene_dataset_config.json"
+base_path = Path(__file__).resolve().parent.parent
+scene_parent_dir = Path(sys.argv[1])
+var_train_val = scene_parent_dir.name
+scene_parent_dir = base_path / scene_parent_dir
+scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/hm3d_annotated_basis.scene_dataset_config.json")
 
 # Get all valid folders
 scene_folders = [d for d in sorted(scene_parent_dir.iterdir()) if d.is_dir()]
 
 print(f"[INFO] Found {len(scene_folders)} scene folders under {scene_parent_dir}")
-
 scene_times = []
 
 for scene_dir in scene_folders:
-    scene_id = scene_dir.name  # ex: 00800-TEEsavR23oF
+    scene_id = scene_dir.name  
     if "-" not in scene_id:
         print(f"[WARNING] Skipping folder {scene_id} (not a valid scene ID format)")
         continue
@@ -81,7 +83,7 @@ for scene_dir in scene_folders:
     semantic_color_map = functions.load_semantic_colors(semanticTXT_path)
 
     # Save to JSON
-    output_path = Path(__file__).resolve().parent / "format/val" / f"{scene_id}_scene_info.json"
+    output_path = base_path / "data/format" /  var_train_val / f"{scene_id}_scene_info.json"
     functions.make_3D_scene_json(scene, scene_id, scene_name, str(output_path))
 
     sim.close()
