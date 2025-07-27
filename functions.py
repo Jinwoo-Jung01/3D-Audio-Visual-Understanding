@@ -247,62 +247,6 @@ def sample_navmesh_points(sim, num_points):
         points.append(point)
     return np.array(points)
 
-def make_custome_cfg_rotation(settings):
-    sim_cfg = habitat_sim.SimulatorConfiguration()
-    sim_cfg.gpu_device_id = 0
-    sim_cfg.scene_id = settings["scene"]
-    sim_cfg.scene_dataset_config_file = settings["scene_cfg_path"]
-
-    # Note: all sensors must have the same resolution
-    sensor_specs = []
-
-    color_sensor_spec = habitat_sim.CameraSensorSpec()
-    color_sensor_spec.uuid = "color_sensor"
-    color_sensor_spec.sensor_type = habitat_sim.SensorType.COLOR
-    color_sensor_spec.resolution = [settings["height"], settings["width"]]
-    color_sensor_spec.position = [0.0, settings["sensor_height"], 0.0]
-    color_sensor_spec.sensor_subtype = habitat_sim.SensorSubType.PINHOLE
-    color_sensor_spec.orientation = settings["roatation"]
-    sensor_specs.append(color_sensor_spec)
-
-    depth_sensor_spec = habitat_sim.CameraSensorSpec()
-    depth_sensor_spec.uuid = "depth_sensor"
-    depth_sensor_spec.sensor_type = habitat_sim.SensorType.DEPTH
-    depth_sensor_spec.resolution = [settings["height"], settings["width"]]
-    depth_sensor_spec.position = [0.0, settings["sensor_height"], 0.0]
-    depth_sensor_spec.sensor_subtype = habitat_sim.SensorSubType.PINHOLE
-    depth_sensor_spec.orientation = settings["roatation"]
-    sensor_specs.append(depth_sensor_spec)
-
-    semantic_sensor_spec = habitat_sim.CameraSensorSpec()
-    semantic_sensor_spec.uuid = "semantic_sensor"
-    semantic_sensor_spec.sensor_type = habitat_sim.SensorType.SEMANTIC
-    semantic_sensor_spec.resolution = [settings["height"], settings["width"]]
-    semantic_sensor_spec.position = [0.0, settings["sensor_height"], 0.0]
-    semantic_sensor_spec.sensor_subtype = habitat_sim.SensorSubType.PINHOLE
-    semantic_sensor_spec.orientation = settings["roatation"]
-    sensor_specs.append(semantic_sensor_spec)
-
-    # Here you can specify the amount of displacement in a forward action and the turn angle
-    agent_cfg = habitat_sim.agent.AgentConfiguration()
-    agent_cfg.sensor_specifications = sensor_specs
-    agent_cfg.action_space = {
-        "move_forward": habitat_sim.agent.ActionSpec(
-            "move_forward", habitat_sim.agent.ActuationSpec(amount=0.25)
-        ),
-        "turn_left": habitat_sim.agent.ActionSpec(
-            "turn_left", habitat_sim.agent.ActuationSpec(amount=30.0)
-        ),
-        "turn_right": habitat_sim.agent.ActionSpec(
-            "turn_right", habitat_sim.agent.ActuationSpec(amount=30.0)
-        ),
-        "noop": habitat_sim.agent.ActionSpec(
-            "noop", habitat_sim.agent.ActuationSpec(amount=0.0)
-        ),
-    }
-
-    return habitat_sim.Configuration(sim_cfg, [agent_cfg])
-
 def make_3D_scene_json(scene, scene_id, scene_name, save_path):
     regions_data = []
     total_objects = 0
@@ -357,8 +301,8 @@ def visualize_3D_scene(json_path, sem_mesh, semantic_color_map, target_region_id
     for region in scene_info["regions"]:
         region_id = region["region_id"]
 
-        if target_region_id is not None and region_id != target_region_id:
-            continue
+        # if target_region_id is not None and region_id != target_region_id:
+        #     continue
 
         print(f"[INFO] Visualizing region_id: {region_id}")
 
@@ -478,87 +422,6 @@ def calculate_rotation(obj_roll_deg, obj_pitch_deg, obj_yaw_deg):
     q_z = mn.Quaternion.rotation(mn.Deg(obj_pitch_deg), mn.Vector3.z_axis())
     
     return q_y * q_z * q_x
-
-def load_objects_from_json(json_path, target_region_id):
-    with open(json_path, 'r') as f:
-        scene_info = json.load(f)
-
-    objects = []
-    for region in scene_info["regions"]:
-        if region["region_id"] != target_region_id:
-            continue
-
-        for obj in region["objects"]:
-            objects.append({
-                "name": f"{region['region_id']}_{obj['semantic_id']}",
-                "center": convert_cordinate(obj["center"]),
-                "class": obj["category"],
-                "semantic_id": obj["semantic_id"]
-            })
-
-    return objects
-
-def load_all_objects_from_json(json_path):
-    with open(json_path, 'r') as f:
-        scene_info = json.load(f)
-
-    objects = []
-    for region in scene_info["regions"]:
-
-        for obj in region["objects"]:
-            objects.append({
-                "name": f"{region['region_id']}_{obj['semantic_id']}",
-                "center": convert_cordinate(obj["center"]),
-                "class": obj["category"],
-                "semantic_id": obj["semantic_id"]
-            })
-
-    return objects
-
-def visualize_subgraph(G, target_node):
-
-    if target_node not in G:
-        print(f"[ERROR] Node {target_node} not found in the graph.")
-        return
-
-    neighbors = list(G.neighbors(target_node))
-    sub_nodes = [target_node] + neighbors
-
-    # 노드들만 추출
-    geometries = []
-    for node in sub_nodes:
-        pos = np.array(G.nodes[node]['pos'])
-        color = G.nodes[node]['color']
-        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.1 if node == target_node else 0.08)
-        sphere.translate(pos)
-        sphere.paint_uniform_color([1, 0, 0] if node == target_node else color)  # 중심 노드는 빨간색
-        sphere.compute_vertex_normals()
-        geometries.append(sphere)
-
-    # 엣지들만 추출
-    lines = []
-    colors = []
-    points = []
-    point_idx_map = {}
-
-    for i, node in enumerate(sub_nodes):
-        point_idx_map[node] = i
-        points.append(G.nodes[node]['pos'])
-
-    for neighbor in neighbors:
-        lines.append([point_idx_map[target_node], point_idx_map[neighbor]])
-        colors.append([1, 0, 0])  # 파란색 선
-
-    line_set = o3d.geometry.LineSet(
-        points=o3d.utility.Vector3dVector(points),
-        lines=o3d.utility.Vector2iVector(lines),
-    )
-    line_set.colors = o3d.utility.Vector3dVector(colors)
-    geometries.append(line_set)
-
-    print(f"[INFO] Visualizing {target_node} and its {len(neighbors)} neighbors.")
-
-    return geometries
 
 def compute_2d_iou(box1, box2):
     """

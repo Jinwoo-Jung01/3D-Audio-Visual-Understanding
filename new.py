@@ -14,7 +14,6 @@ import open3d as o3d
 import sys
 from pathlib import Path
 import networkx as nx
-from scipy.spatial.distance import euclidean
 import json
 
 import functions
@@ -160,12 +159,13 @@ if __name__ == "__main__":
 
     # make path automatically
     base_path = Path(__file__).resolve().parent.parent
-    scene_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.glb")
-    semantic_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.glb")
-    semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.semantic.txt")
-    navmesh_path = str(base_path / f"data/scene_dataset/hm3d/val/{scene_id}/{scene_name}.basis.navmesh")
-    scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/val/hm3d_annotated_val_basis.scene_dataset_config.json")
-    json_path = str(base_path / f"data/format/val/{scene_id}_scene_info.json")
+    scene_cfg_path = str(base_path / "data/scene_dataset/hm3d/hm3d_annotated_basis.scene_dataset_config.json")
+    top_folder = functions.find_parent_folder(scene_cfg_path, scene_id)
+    scene_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.basis.glb")
+    semantic_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.semantic.glb")
+    semanticTXT_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.semantic.txt")
+    navmesh_path = str(base_path / f"data/scene_dataset/hm3d/{top_folder}/{scene_id}/{scene_name}.basis.navmesh")
+    json_path = str(base_path / f"data_origin/format/{top_folder}/{scene_id}_scene_info.json")
 
     # load mesh
     sem_mesh = o3d.io.read_triangle_mesh(semantic_path)
@@ -201,8 +201,8 @@ if __name__ == "__main__":
     semantic_color_map = functions.load_semantic_colors(semanticTXT_path)
     sim.pathfinder.load_nav_mesh(navmesh_path)
 
-    # Room 선택
-    target_region_ids = [1, 4, 8]
+    # Get all region IDs automatically
+    target_region_ids = [int(region.id.split("_")[-1]) for region in scene.regions]
 
     # Mesh crop for each room
     cropped_meshes = []
